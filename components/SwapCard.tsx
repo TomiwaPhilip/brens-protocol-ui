@@ -169,11 +169,11 @@ export default function SwapCard() {
   const isLoading = isApproving || isSwapping;
 
   return (
-    <div className="w-full max-w-md mx-auto p-6 bg-white dark:bg-zinc-900 rounded-2xl shadow-xl">
+    <div className="w-full max-w-md mx-auto p-6 rounded-2xl shadow-xl" style={{ backgroundColor: "#1e293b" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-zinc-900 dark:text-white">Swap</h2>
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+        <h2 className="text-2xl font-bold" style={{ color: "#f8fafc" }}>Swap</h2>
+        <div className="text-xs" style={{ color: "#cbd5e1" }}>
           Unichain Sepolia
         </div>
       </div>
@@ -181,11 +181,12 @@ export default function SwapCard() {
       {/* Connect Wallet */}
       {!isConnected ? (
         <div className="flex flex-col items-center justify-center py-12 space-y-4">
-          <p className="text-zinc-600 dark:text-zinc-400">Connect your wallet to start swapping</p>
+          <p style={{ color: "#cbd5e1" }}>Connect your wallet to start swapping</p>
           <button
             onClick={login}
             disabled={!ready}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium rounded-xl transition-colors"
+            className="px-6 py-3 font-medium rounded-xl transition-colors"
+            style={{ backgroundColor: ready ? "#10b981" : "#334155", color: "#f8fafc" }}
           >
             Connect Wallet
           </button>
@@ -195,12 +196,13 @@ export default function SwapCard() {
           {/* Input Token */}
           <div className="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-xl">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">From</span>
-              <div className="text-sm text-zinc-600 dark:text-zinc-400">
+              <span className="text-sm" style={{ color: "#cbd5e1" }}>From</span>
+              <div className="text-sm" style={{ color: "#cbd5e1" }}>
                 Balance: {parseFloat(balances.input).toFixed(4)}
                 <button
                   onClick={handleMaxClick}
-                  className="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
+                  className="ml-2 hover:underline"
+                  style={{ color: "#10b981" }}
                 >
                   MAX
                 </button>
@@ -227,10 +229,12 @@ export default function SwapCard() {
             <button
               onClick={handleSwitchTokens}
               aria-label="Switch tokens"
-              className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              className="p-2 rounded-full transition-colors"
+              style={{ backgroundColor: "#1e293b" }}
             >
               <svg
-                className="w-6 h-6 text-zinc-600 dark:text-zinc-400"
+                className="w-6 h-6"
+                style={{ color: "#10b981" }}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -271,10 +275,10 @@ export default function SwapCard() {
 
           {/* Info Banner */}
           {amount && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <div className="p-3 rounded-lg" style={{ backgroundColor: "rgba(16, 185, 129, 0.1)" }}>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-blue-900 dark:text-blue-300">Rate</span>
-                <span className="font-medium text-blue-900 dark:text-blue-300">1:1 (Zero fees)</span>
+                <span style={{ color: "#10b981" }}>Rate</span>
+                <span className="font-medium" style={{ color: "#10b981" }}>1:1 (Zero fees)</span>
               </div>
             </div>
           )}
@@ -284,7 +288,8 @@ export default function SwapCard() {
             <button
               onClick={handleApprove}
               disabled={isLoading || !amount}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
+              className="w-full py-4 disabled:cursor-not-allowed font-medium rounded-xl transition-colors"
+              style={{ backgroundColor: (isLoading || !amount) ? "#334155" : "#10b981", color: "#f8fafc" }}
             >
               {isApproving ? "Approving..." : `Approve ${inputToken.symbol}`}
             </button>
@@ -292,7 +297,8 @@ export default function SwapCard() {
             <button
               onClick={handleSwap}
               disabled={isLoading || !amount || parseFloat(amount) === 0}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
+              className="w-full py-4 disabled:cursor-not-allowed font-medium rounded-xl transition-colors"
+              style={{ backgroundColor: (isLoading || !amount || parseFloat(amount) === 0) ? "#334155" : "#10b981", color: "#f8fafc" }}
             >
               {isSwapping ? "Swapping..." : "Swap"}
             </button>
@@ -300,7 +306,7 @@ export default function SwapCard() {
 
           {/* Transaction Status */}
           {txStatus && (
-            <div className="text-center text-sm text-zinc-600 dark:text-zinc-400">
+            <div className="text-center text-sm" style={{ color: "#cbd5e1" }}>
               {txStatus}
             </div>
           )}
@@ -308,11 +314,11 @@ export default function SwapCard() {
       )}
 
       {/* Protocol Info */}
-      <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+      <div className="mt-6 pt-6 border-t" style={{ borderColor: "#334155" }}>
+        <div className="flex items-center justify-between text-xs" style={{ color: "#cbd5e1" }}>
           <span>Powered by Brens Protocol</span>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "#10b981" }}></span>
             <span>Zero Slippage</span>
           </div>
         </div>

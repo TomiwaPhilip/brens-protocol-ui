@@ -10,7 +10,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       config={{
         appearance: {
           theme: "dark",
-          accentColor: "#2563eb",
+          accentColor: "#10b981",
           logo: undefined,
         },
         embeddedWallets: {
