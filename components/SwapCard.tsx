@@ -42,8 +42,8 @@ export default function SwapCard() {
   const getProvider = async () => {
     if (!wallet) throw new Error("No wallet connected");
     await wallet.switchChain(1301); // Unichain Sepolia
-    const provider = await wallet.getEthersProvider();
-    return new ethers.BrowserProvider(provider);
+    const ethereumProvider = await wallet.getEthereumProvider();
+    return new ethers.BrowserProvider(ethereumProvider);
   };
 
   const fetchBalances = async () => {
