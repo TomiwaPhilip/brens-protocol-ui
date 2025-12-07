@@ -1,7 +1,10 @@
+"use client";
+
 import SwapCard from "@/components/SwapCard";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { usePrivy } from "@privy-io/react-auth";
 
 export default function Home() {
+  const { login, logout, authenticated, ready } = usePrivy();
   return (
     <div className="flex min-h-screen flex-col bg-linear-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-800">
       {/* Header */}
@@ -20,7 +23,23 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <ConnectButton />
+          {ready && (
+            authenticated ? (
+              <button
+                onClick={logout}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button
+                onClick={login}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Connect Wallet
+              </button>
+            )
+          )}
         </div>
       </header>
 

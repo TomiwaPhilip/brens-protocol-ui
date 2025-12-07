@@ -1,20 +1,27 @@
-import { http, createConfig } from "wagmi";
-import { unichainSepolia } from "wagmi/chains";
-import { injected } from "wagmi/connectors";
-
-// Configure chains & transports
-export const config = createConfig({
-  chains: [unichainSepolia],
-  connectors: [
-    injected(),
-  ],
-  transports: {
-    [unichainSepolia.id]: http("https://sepolia.unichain.org"),
+// Unichain Sepolia configuration
+export const UNICHAIN_SEPOLIA = {
+  id: 1301,
+  name: "Unichain Sepolia",
+  network: "unichain-sepolia",
+  nativeCurrency: {
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18,
   },
-});
+  rpcUrls: {
+    default: {
+      http: ["https://sepolia.unichain.org"],
+    },
+    public: {
+      http: ["https://sepolia.unichain.org"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Blockscout",
+      url: "https://unichain-sepolia.blockscout.com",
+    },
+  },
+  testnet: true,
+};
 
-declare module "wagmi" {
-  interface Register {
-    config: typeof config;
-  }
-}

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther, formatEther, Address } from "viem";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   CONTRACTS,
   TOKENS,
@@ -15,9 +15,13 @@ import {
 } from "@/lib/constants";
 
 export default function SwapCard() {
-  const { address, isConnected } = useAccount();
+  const { login, authenticated, ready } = usePrivy();
+  const { wallets } = useWallets();
+  const { address } = useAccount();
   const [amount, setAmount] = useState("");
   const [isTokenAToB, setIsTokenAToB] = useState(true);
+
+  const isConnected = authenticated && !!address;
 
   const inputToken = isTokenAToB ? TOKENS.TOKEN_A : TOKENS.TOKEN_B;
   const outputToken = isTokenAToB ? TOKENS.TOKEN_B : TOKENS.TOKEN_A;
@@ -155,7 +159,13 @@ export default function SwapCard() {
       {!isConnected ? (
         <div className="flex flex-col items-center justify-center py-12 space-y-4">
           <p className="text-zinc-600 dark:text-zinc-400">Connect your wallet to start swapping</p>
-          <ConnectButton />
+          <button
+            onClick={login}
+            disabled={!ready}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium rounded-xl transition-colors"
+          >
+            Connect Wallet
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
