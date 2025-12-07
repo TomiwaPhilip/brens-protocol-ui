@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { ethers } from "ethers";
+import toast, { Toaster } from "react-hot-toast";
 import {
   CONTRACTS,
   TOKENS,
   ERC20_ABI,
   ROUTER_ABI,
+  FAUCET_ABI,
   POOL_KEY,
   MIN_SQRT_PRICE,
   MAX_SQRT_PRICE,
@@ -25,6 +27,8 @@ export default function SwapCard() {
   const [txStatus, setTxStatus] = useState("");
   const [txHash, setTxHash] = useState<string | null>(null);
   const [address, setAddress] = useState<string>("");
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [hasClaimed, setHasClaimed] = useState(false);
 
   const inputToken = isTokenAToB ? TOKENS.TOKEN_A : TOKENS.TOKEN_B;
   const outputToken = isTokenAToB ? TOKENS.TOKEN_B : TOKENS.TOKEN_A;
@@ -37,6 +41,7 @@ export default function SwapCard() {
       setAddress(wallet.address);
       fetchBalances();
       fetchAllowance();
+      checkHasClaimed();
     }
   }, [wallet, isTokenAToB]);
 
@@ -167,17 +172,81 @@ export default function SwapCard() {
     setAmount("");
   };
 
+  const checkHasClaimed = async () => {
+    if (!wallet) return;
+    try {
+      const provider = await getProvider();
+      const faucetContract = new ethers.Contract(CONTRACTS.FAUCET, FAUCET_ABI, provider);
+      const claimed = await faucetContract.hasClaimed(wallet.address);
+      setHasClaimed(claimed);
+    } catch (error) {
+      console.error("Error checking claim status:", error);
+    }
+  };
+
+  const handleClaimTokens = async () => {
+    if (!wallet) return;
+    setIsClaiming(true);
+
+    try {
+      const provider = await getProvider();
+      const signer = await provider.getSigner();
+      const faucetContract = new ethers.Contract(CONTRACTS.FAUCET, FAUCET_ABI, signer);
+
+      toast.loading("Claiming test tokens...", { id: "claim" });
+
+      const tx = await faucetContract.claimTokens();
+      await tx.wait();
+
+      setHasClaimed(true);
+      await fetchBalances();
+
+      toast.success(
+        <div>
+          <div className="font-semibold">Tokens claimed successfully!</div>
+          <div className="text-sm mt-1">Received: 1,000 {TOKENS.TOKEN_A.symbol} + 1,000 {TOKENS.TOKEN_B.symbol}</div>
+        </div>,
+        { id: "claim", duration: 5000 }
+      );
+    } catch (error: any) {
+      console.error("Claim error:", error);
+      if (error.message?.includes("AlreadyClaimed")) {
+        toast.error("You have already claimed tokens!", { id: "claim" });
+      } else if (error.message?.includes("InsufficientBalance")) {
+        toast.error("Faucet is empty. Please contact support.", { id: "claim" });
+      } else {
+        toast.error("Failed to claim tokens: " + (error.shortMessage || error.message || "Unknown error"), { id: "claim" });
+      }
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
   const isConnected = authenticated && wallet;
   const isLoading = isApproving || isSwapping;
 
   return (
     <div className="w-full max-w-md mx-auto p-6 rounded-2xl shadow-xl" style={{ backgroundColor: "#1e293b" }}>
+      <Toaster position="top-center" />
+      
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold" style={{ color: "#f8fafc" }}>Swap</h2>
-        <div className="text-xs" style={{ color: "#cbd5e1" }}>
-          Unichain Sepolia
+        <div>
+          <h2 className="text-2xl font-bold" style={{ color: "#f8fafc" }}>Swap</h2>
+          <div className="text-xs" style={{ color: "#cbd5e1" }}>
+            Unichain Sepolia
+          </div>
         </div>
+        {isConnected && (
+          <button
+            onClick={handleClaimTokens}
+            disabled={isClaiming || hasClaimed}
+            className="px-3 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ backgroundColor: hasClaimed ? "#334155" : "#10b981", color: "#f8fafc" }}
+          >
+            {isClaiming ? "Claiming..." : hasClaimed ? "Claimed" : "Get Test Tokens"}
+          </button>
+        )}
       </div>
 
       {/* Connect Wallet */}

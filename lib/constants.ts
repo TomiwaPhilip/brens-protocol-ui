@@ -5,6 +5,7 @@ export const CONTRACTS = {
   TOKEN_B: "0x70F648C883566493fbaaD3D329815eABbDE8AB31",
   ROUTER: "0x0ae5F4aFe70f0A9351D8c0fd017183722437eEdf",
   POOL_MANAGER: "0x00B036B58a818B1BC34d502D3fE730Db729e62AC",
+  FAUCET: "0xE6aFe6a0243609620882C3169546761a9dFB2E2B",
 } as const;
 
 // Token metadata
@@ -121,3 +122,28 @@ export const POOL_KEY = {
 // Uniswap v4 constants
 export const MIN_SQRT_PRICE = BigInt("4295128739");
 export const MAX_SQRT_PRICE = BigInt("1461446703485210103287273052203988822378723970342");
+
+// Faucet ABI
+export const FAUCET_ABI = [
+  {
+    inputs: [],
+    name: "claimTokens",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "user", type: "address" }],
+    name: "hasClaimed",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "CLAIM_AMOUNT",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
