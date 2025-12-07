@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther, formatEther, Address } from "viem";
+import { ethers } from "ethers";
 import {
   CONTRACTS,
   TOKENS,
@@ -17,114 +16,148 @@ import {
 export default function SwapCard() {
   const { login, authenticated, ready } = usePrivy();
   const { wallets } = useWallets();
-  const { address } = useAccount();
   const [amount, setAmount] = useState("");
   const [isTokenAToB, setIsTokenAToB] = useState(true);
-
-  const isConnected = authenticated && !!address;
+  const [balances, setBalances] = useState({ input: "0", output: "0" });
+  const [allowance, setAllowance] = useState("0");
+  const [isApproving, setIsApproving] = useState(false);
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [txStatus, setTxStatus] = useState("");
+  const [address, setAddress] = useState<string>("");
 
   const inputToken = isTokenAToB ? TOKENS.TOKEN_A : TOKENS.TOKEN_B;
   const outputToken = isTokenAToB ? TOKENS.TOKEN_B : TOKENS.TOKEN_A;
 
-  // Read token balances
-  const { data: inputBalance, refetch: refetchInputBalance } = useReadContract({
-    address: inputToken.address as Address,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  });
+  // Get wallet and provider
+  const wallet = wallets[0];
 
-  const { data: outputBalance, refetch: refetchOutputBalance } = useReadContract({
-    address: outputToken.address as Address,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  });
+  useEffect(() => {
+    if (wallet) {
+      setAddress(wallet.address);
+      fetchBalances();
+      fetchAllowance();
+    }
+  }, [wallet, isTokenAToB]);
 
-  // Read allowance
-  const { data: allowance, refetch: refetchAllowance } = useReadContract({
-    address: inputToken.address as Address,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address ? [address, CONTRACTS.ROUTER] : undefined,
-    query: { enabled: !!address },
-  });
+  const getProvider = async () => {
+    if (!wallet) throw new Error("No wallet connected");
+    await wallet.switchChain(1301); // Unichain Sepolia
+    const provider = await wallet.getEthersProvider();
+    return new ethers.BrowserProvider(provider);
+  };
 
-  // Write contracts
-  const {
-    writeContract: approve,
-    data: approveHash,
-    isPending: isApproving,
-  } = useWriteContract();
+  const fetchBalances = async () => {
+    if (!wallet) return;
+    try {
+      const provider = await getProvider();
+      const inputContract = new ethers.Contract(inputToken.address, ERC20_ABI, provider);
+      const outputContract = new ethers.Contract(outputToken.address, ERC20_ABI, provider);
 
-  const {
-    writeContract: swap,
-    data: swapHash,
-    isPending: isSwapping,
-  } = useWriteContract();
+      const [inputBal, outputBal] = await Promise.all([
+        inputContract.balanceOf(wallet.address),
+        outputContract.balanceOf(wallet.address),
+      ]);
 
-  // Wait for transactions
-  const { isLoading: isApproveTxLoading } = useWaitForTransactionReceipt({
-    hash: approveHash,
-  });
+      setBalances({
+        input: ethers.formatEther(inputBal),
+        output: ethers.formatEther(outputBal),
+      });
+    } catch (error) {
+      console.error("Error fetching balances:", error);
+    }
+  };
 
-  const { isLoading: isSwapTxLoading } = useWaitForTransactionReceipt({
-    hash: swapHash,
-  });
+  const fetchAllowance = async () => {
+    if (!wallet || !amount) return;
+    try {
+      const provider = await getProvider();
+      const contract = new ethers.Contract(inputToken.address, ERC20_ABI, provider);
+      const allow = await contract.allowance(wallet.address, CONTRACTS.ROUTER);
+      setAllowance(ethers.formatEther(allow));
+    } catch (error) {
+      console.error("Error fetching allowance:", error);
+    }
+  };
 
   const needsApproval = () => {
     if (!amount || !allowance) return false;
     try {
-      const amountBigInt = parseEther(amount);
-      return (allowance as bigint) < amountBigInt;
+      return parseFloat(allowance) < parseFloat(amount);
     } catch {
       return false;
     }
   };
 
   const handleApprove = async () => {
+    if (!wallet || !amount) return;
+    setIsApproving(true);
+    setTxStatus("Approving...");
+
     try {
-      approve({
-        address: inputToken.address as Address,
-        abi: ERC20_ABI,
-        functionName: "approve",
-        args: [CONTRACTS.ROUTER, parseEther(amount)],
-      });
-    } catch (error) {
+      const provider = await getProvider();
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(inputToken.address, ERC20_ABI, signer);
+      
+      const amountWei = ethers.parseEther(amount);
+      const tx = await contract.approve(CONTRACTS.ROUTER, amountWei);
+      
+      setTxStatus("Waiting for approval confirmation...");
+      await tx.wait();
+      
+      setTxStatus("Approval confirmed!");
+      await fetchAllowance();
+      setTimeout(() => setTxStatus(""), 3000);
+    } catch (error: any) {
       console.error("Approval error:", error);
+      setTxStatus("Approval failed: " + (error.message || "Unknown error"));
+      setTimeout(() => setTxStatus(""), 5000);
+    } finally {
+      setIsApproving(false);
     }
   };
 
   const handleSwap = async () => {
-    if (!amount) return;
+    if (!wallet || !amount) return;
+    setIsSwapping(true);
+    setTxStatus("Swapping...");
 
     try {
-      const amountBigInt = parseEther(amount);
-      
-      swap({
-        address: CONTRACTS.ROUTER as Address,
-        abi: ROUTER_ABI,
-        functionName: "swap",
-        args: [
-          POOL_KEY,
-          {
-            zeroForOne: isTokenAToB,
-            amountSpecified: -BigInt(amountBigInt.toString()), // Negative for exact input
-            sqrtPriceLimitX96: isTokenAToB ? MIN_SQRT_PRICE + 1n : MAX_SQRT_PRICE - 1n,
-          },
-        ],
-      });
-    } catch (error) {
+      const provider = await getProvider();
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACTS.ROUTER, ROUTER_ABI, signer);
+
+      const amountWei = ethers.parseEther(amount);
+      const sqrtPriceLimit = isTokenAToB 
+        ? BigInt(MIN_SQRT_PRICE) + 1n 
+        : BigInt(MAX_SQRT_PRICE) - 1n;
+
+      const tx = await contract.swap(
+        POOL_KEY,
+        {
+          zeroForOne: isTokenAToB,
+          amountSpecified: -amountWei, // Negative for exact input
+          sqrtPriceLimitX96: sqrtPriceLimit,
+        }
+      );
+
+      setTxStatus("Waiting for swap confirmation...");
+      await tx.wait();
+
+      setTxStatus("Swap successful!");
+      await fetchBalances();
+      setAmount("");
+      setTimeout(() => setTxStatus(""), 3000);
+    } catch (error: any) {
       console.error("Swap error:", error);
+      setTxStatus("Swap failed: " + (error.message || "Unknown error"));
+      setTimeout(() => setTxStatus(""), 5000);
+    } finally {
+      setIsSwapping(false);
     }
   };
 
   const handleMaxClick = () => {
-    if (inputBalance) {
-      setAmount(formatEther(inputBalance as bigint));
-    }
+    setAmount(balances.input);
   };
 
   const handleSwitchTokens = () => {
@@ -132,18 +165,8 @@ export default function SwapCard() {
     setAmount("");
   };
 
-  // Refetch balances after successful transactions
-  if (approveHash && !isApproveTxLoading) {
-    refetchAllowance();
-  }
-
-  if (swapHash && !isSwapTxLoading) {
-    refetchInputBalance();
-    refetchOutputBalance();
-    setAmount("");
-  }
-
-  const isLoading = isApproving || isApproveTxLoading || isSwapping || isSwapTxLoading;
+  const isConnected = authenticated && wallet;
+  const isLoading = isApproving || isSwapping;
 
   return (
     <div className="w-full max-w-md mx-auto p-6 bg-white dark:bg-zinc-900 rounded-2xl shadow-xl">
@@ -174,7 +197,7 @@ export default function SwapCard() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-zinc-600 dark:text-zinc-400">From</span>
               <div className="text-sm text-zinc-600 dark:text-zinc-400">
-                Balance: {inputBalance ? formatEther(inputBalance as bigint).slice(0, 8) : "0.00"}
+                Balance: {parseFloat(balances.input).toFixed(4)}
                 <button
                   onClick={handleMaxClick}
                   className="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
@@ -227,7 +250,7 @@ export default function SwapCard() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-zinc-600 dark:text-zinc-400">To</span>
               <div className="text-sm text-zinc-600 dark:text-zinc-400">
-                Balance: {outputBalance ? formatEther(outputBalance as bigint).slice(0, 8) : "0.00"}
+                Balance: {parseFloat(balances.output).toFixed(4)}
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -263,9 +286,7 @@ export default function SwapCard() {
               disabled={isLoading || !amount}
               className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
             >
-              {isApproving || isApproveTxLoading
-                ? "Approving..."
-                : `Approve ${inputToken.symbol}`}
+              {isApproving ? "Approving..." : `Approve ${inputToken.symbol}`}
             </button>
           ) : (
             <button
@@ -273,17 +294,14 @@ export default function SwapCard() {
               disabled={isLoading || !amount || parseFloat(amount) === 0}
               className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
             >
-              {isSwapping || isSwapTxLoading ? "Swapping..." : "Swap"}
+              {isSwapping ? "Swapping..." : "Swap"}
             </button>
           )}
 
           {/* Transaction Status */}
-          {(approveHash || swapHash) && (
+          {txStatus && (
             <div className="text-center text-sm text-zinc-600 dark:text-zinc-400">
-              {isApproveTxLoading && "Waiting for approval confirmation..."}
-              {isSwapTxLoading && "Waiting for swap confirmation..."}
-              {approveHash && !isApproveTxLoading && "Approval confirmed!"}
-              {swapHash && !isSwapTxLoading && "Swap successful!"}
+              {txStatus}
             </div>
           )}
         </div>
