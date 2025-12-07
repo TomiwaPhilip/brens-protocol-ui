@@ -1,23 +1,18 @@
-"use client";
+'use client';
 
-import { PrivyProvider } from "@privy-io/react-auth";
-import { UNICHAIN_SEPOLIA } from "@/lib/wagmi";
+import { PrivyProvider } from '@privy-io/react-auth';
+import { unichainSepolia } from '@/lib/wagmi';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <PrivyProvider
-      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || "clzkuypw50029mm0fxcu6f9k4"}
+      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || 'clzkuypw50029mm0fxcu6f9k4'}
       config={{
         appearance: {
-          theme: "dark",
-          accentColor: "#10b981",
-          logo: undefined,
+          theme: 'dark',
+          accentColor: '#10b981',
         },
-        embeddedWallets: {
-          createOnLogin: "users-without-wallets",
-        },
-        defaultChain: UNICHAIN_SEPOLIA,
-        supportedChains: [UNICHAIN_SEPOLIA],
+        defaultChain: unichainSepolia,
       }}
     >
       {children}
