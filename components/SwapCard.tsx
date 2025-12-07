@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { ethers } from "ethers";
+import { createWalletClient, custom, createPublicClient, http, formatEther, parseEther, type Address } from "viem";
+import { unichainSepolia } from "viem/chains";
 import toast, { Toaster } from "react-hot-toast";
 import {
   CONTRACTS,
@@ -16,8 +16,7 @@ import {
 } from "@/lib/constants";
 
 export default function SwapCard() {
-  const { login, authenticated, ready } = usePrivy();
-  const { wallets } = useWallets();
+  const [account, setAccount] = useState<Address | null>(null);
   const [amount, setAmount] = useState("");
   const [isTokenAToB, setIsTokenAToB] = useState(true);
   const [balances, setBalances] = useState({ input: "0", output: "0" });
@@ -26,47 +25,104 @@ export default function SwapCard() {
   const [isSwapping, setIsSwapping] = useState(false);
   const [txStatus, setTxStatus] = useState("");
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [address, setAddress] = useState<string>("");
   const [isClaiming, setIsClaiming] = useState(false);
   const [hasClaimed, setHasClaimed] = useState(false);
 
   const inputToken = isTokenAToB ? TOKENS.TOKEN_A : TOKENS.TOKEN_B;
   const outputToken = isTokenAToB ? TOKENS.TOKEN_B : TOKENS.TOKEN_A;
 
-  // Get wallet and provider
-  const wallet = wallets[0];
+  const publicClient = createPublicClient({
+    chain: unichainSepolia,
+    transport: http(),
+  });
 
   useEffect(() => {
-    if (wallet) {
-      setAddress(wallet.address);
+    if (account) {
       fetchBalances();
       fetchAllowance();
       checkHasClaimed();
     }
-  }, [wallet, isTokenAToB]);
+  }, [account, isTokenAToB]);
 
-  const getProvider = async () => {
-    if (!wallet) throw new Error("No wallet connected");
-    await wallet.switchChain(1301); // Unichain Sepolia
-    const ethereumProvider = await wallet.getEthereumProvider();
-    return new ethers.BrowserProvider(ethereumProvider);
+  const connectWallet = async () => {
+    if (typeof window.ethereum === "undefined") {
+      toast.error("Please install MetaMask!");
+      return;
+    }
+
+    try {
+      const accounts = await window.ethereum.request({
+        method: "eth_requestAccounts",
+      });
+      
+      // Switch to Unichain Sepolia
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x515" }], // 1301 in hex
+        });
+      } catch (switchError: any) {
+        // Chain not added, add it
+        if (switchError.code === 4902) {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x515",
+              chainName: "Unichain Sepolia",
+              nativeCurrency: {
+                name: "Ether",
+                symbol: "ETH",
+                decimals: 18,
+              },
+              rpcUrls: ["https://sepolia.unichain.org"],
+              blockExplorerUrls: ["https://unichain-sepolia.blockscout.com"],
+            }],
+          });
+        }
+      }
+
+      setAccount(accounts[0] as Address);
+      toast.success("Wallet connected!");
+    } catch (error) {
+      console.error("Connection error:", error);
+      toast.error("Failed to connect wallet");
+    }
+  };
+
+  const disconnectWallet = () => {
+    setAccount(null);
+    toast.success("Wallet disconnected");
+  };
+
+  const getWalletClient = () => {
+    if (!window.ethereum) throw new Error("No ethereum provider");
+    return createWalletClient({
+      chain: unichainSepolia,
+      transport: custom(window.ethereum),
+    });
   };
 
   const fetchBalances = async () => {
-    if (!wallet) return;
+    if (!account) return;
     try {
-      const provider = await getProvider();
-      const inputContract = new ethers.Contract(inputToken.address, ERC20_ABI, provider);
-      const outputContract = new ethers.Contract(outputToken.address, ERC20_ABI, provider);
-
       const [inputBal, outputBal] = await Promise.all([
-        inputContract.balanceOf(wallet.address),
-        outputContract.balanceOf(wallet.address),
+        publicClient.readContract({
+          address: inputToken.address as Address,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [account],
+        }),
+        publicClient.readContract({
+          address: outputToken.address as Address,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [account],
+        }),
       ]);
 
       setBalances({
-        input: ethers.formatEther(inputBal),
-        output: ethers.formatEther(outputBal),
+        input: formatEther(inputBal as bigint),
+        output: formatEther(outputBal as bigint),
       });
     } catch (error) {
       console.error("Error fetching balances:", error);
@@ -74,19 +130,37 @@ export default function SwapCard() {
   };
 
   const fetchAllowance = async () => {
-    if (!wallet || !amount) return;
+    if (!account || !amount) return;
     try {
-      const provider = await getProvider();
-      const contract = new ethers.Contract(inputToken.address, ERC20_ABI, provider);
-      const allow = await contract.allowance(wallet.address, CONTRACTS.ROUTER);
-      setAllowance(ethers.formatEther(allow));
+      const allow = await publicClient.readContract({
+        address: inputToken.address as Address,
+        abi: ERC20_ABI,
+        functionName: "allowance",
+        args: [account, CONTRACTS.ROUTER as Address],
+      });
+      setAllowance(formatEther(allow as bigint));
     } catch (error) {
       console.error("Error fetching allowance:", error);
     }
   };
 
+  const checkHasClaimed = async () => {
+    if (!account) return;
+    try {
+      const claimed = await publicClient.readContract({
+        address: CONTRACTS.FAUCET as Address,
+        abi: FAUCET_ABI,
+        functionName: "hasClaimed",
+        args: [account],
+      });
+      setHasClaimed(claimed as boolean);
+    } catch (error) {
+      console.error("Error checking claim status:", error);
+    }
+  };
+
   const needsApproval = () => {
-    if (!amount || !allowance) return false;
+    if (!amount || parseFloat(amount) === 0) return false;
     try {
       return parseFloat(allowance) < parseFloat(amount);
     } catch {
@@ -95,20 +169,24 @@ export default function SwapCard() {
   };
 
   const handleApprove = async () => {
-    if (!wallet || !amount) return;
+    if (!account || !amount) return;
     setIsApproving(true);
     setTxStatus("Approving...");
 
     try {
-      const provider = await getProvider();
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(inputToken.address, ERC20_ABI, signer);
+      const walletClient = getWalletClient();
+      const amountWei = parseEther(amount);
       
-      const amountWei = ethers.parseEther(amount);
-      const tx = await contract.approve(CONTRACTS.ROUTER, amountWei);
+      const hash = await walletClient.writeContract({
+        account,
+        address: inputToken.address as Address,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [CONTRACTS.ROUTER, amountWei],
+      });
       
       setTxStatus("Waiting for approval confirmation...");
-      await tx.wait();
+      await publicClient.waitForTransactionReceipt({ hash });
       
       setTxStatus("Approval confirmed!");
       await fetchAllowance();
@@ -123,34 +201,37 @@ export default function SwapCard() {
   };
 
   const handleSwap = async () => {
-    if (!wallet || !amount) return;
+    if (!account || !amount) return;
     setIsSwapping(true);
     setTxHash(null);
     setTxStatus("Swapping...");
 
     try {
-      const provider = await getProvider();
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACTS.ROUTER, ROUTER_ABI, signer);
-
-      const amountWei = ethers.parseEther(amount);
+      const walletClient = getWalletClient();
+      const amountWei = parseEther(amount);
       const sqrtPriceLimit = isTokenAToB 
         ? BigInt(MIN_SQRT_PRICE) + 1n 
         : BigInt(MAX_SQRT_PRICE) - 1n;
 
-      const tx = await contract.swap(
-        POOL_KEY,
-        {
-          zeroForOne: isTokenAToB,
-          amountSpecified: -amountWei, // Negative for exact input
-          sqrtPriceLimitX96: sqrtPriceLimit,
-        }
-      );
+      const hash = await walletClient.writeContract({
+        account,
+        address: CONTRACTS.ROUTER as Address,
+        abi: ROUTER_ABI,
+        functionName: "swap",
+        args: [
+          POOL_KEY,
+          {
+            zeroForOne: isTokenAToB,
+            amountSpecified: -amountWei,
+            sqrtPriceLimitX96: sqrtPriceLimit,
+          },
+        ],
+      });
 
       setTxStatus("Waiting for swap confirmation...");
-      await tx.wait();
+      await publicClient.waitForTransactionReceipt({ hash });
 
-      setTxHash(tx.hash);
+      setTxHash(hash);
       setTxStatus("Swap successful!");
       await fetchBalances();
       setAmount("");
@@ -172,31 +253,22 @@ export default function SwapCard() {
     setAmount("");
   };
 
-  const checkHasClaimed = async () => {
-    if (!wallet) return;
-    try {
-      const provider = await getProvider();
-      const faucetContract = new ethers.Contract(CONTRACTS.FAUCET, FAUCET_ABI, provider);
-      const claimed = await faucetContract.hasClaimed(wallet.address);
-      setHasClaimed(claimed);
-    } catch (error) {
-      console.error("Error checking claim status:", error);
-    }
-  };
-
   const handleClaimTokens = async () => {
-    if (!wallet) return;
+    if (!account) return;
     setIsClaiming(true);
 
     try {
-      const provider = await getProvider();
-      const signer = await provider.getSigner();
-      const faucetContract = new ethers.Contract(CONTRACTS.FAUCET, FAUCET_ABI, signer);
-
+      const walletClient = getWalletClient();
       toast.loading("Claiming test tokens...", { id: "claim" });
 
-      const tx = await faucetContract.claimTokens();
-      await tx.wait();
+      const hash = await walletClient.writeContract({
+        account,
+        address: CONTRACTS.FAUCET as Address,
+        abi: FAUCET_ABI,
+        functionName: "claimTokens",
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
 
       setHasClaimed(true);
       await fetchBalances();
@@ -222,7 +294,7 @@ export default function SwapCard() {
     }
   };
 
-  const isConnected = authenticated && wallet;
+  const isConnected = !!account;
   const isLoading = isApproving || isSwapping;
 
   return (
@@ -254,16 +326,30 @@ export default function SwapCard() {
         <div className="flex flex-col items-center justify-center py-12 space-y-4">
           <p style={{ color: "#cbd5e1" }}>Connect your wallet to start swapping</p>
           <button
-            onClick={login}
-            disabled={!ready}
+            onClick={connectWallet}
             className="px-6 py-3 font-medium rounded-xl transition-colors"
-            style={{ backgroundColor: ready ? "#10b981" : "#334155", color: "#f8fafc" }}
+            style={{ backgroundColor: "#10b981", color: "#f8fafc" }}
           >
             Connect Wallet
           </button>
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Connected Address */}
+          <div className="flex items-center justify-between text-sm mb-4">
+            <span style={{ color: "#cbd5e1" }}>Connected:</span>
+            <div className="flex items-center gap-2">
+              <span style={{ color: "#10b981" }}>{account.slice(0, 6)}...{account.slice(-4)}</span>
+              <button
+                onClick={disconnectWallet}
+                className="text-xs px-2 py-1 rounded"
+                style={{ backgroundColor: "#334155", color: "#cbd5e1" }}
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+
           {/* Input Token */}
           <div className="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-xl">
             <div className="flex items-center justify-between mb-2">

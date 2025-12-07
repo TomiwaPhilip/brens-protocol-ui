@@ -1,10 +1,8 @@
 "use client";
 
 import SwapCard from "@/components/SwapCard";
-import { usePrivy } from "@privy-io/react-auth";
 
 export default function Home() {
-  const { login, logout, authenticated, ready } = usePrivy();
   return (
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: "#0f172a" }}>
       {/* Header */}
@@ -23,25 +21,6 @@ export default function Home() {
               </p>
             </div>
           </div>
-          {ready && (
-            authenticated ? (
-              <button
-                onClick={logout}
-                className="px-4 py-2 rounded-lg transition-colors"
-                style={{ backgroundColor: "#1e293b", color: "#f8fafc" }}
-              >
-                Disconnect
-              </button>
-            ) : (
-              <button
-                onClick={login}
-                className="px-4 py-2 rounded-lg transition-colors"
-                style={{ backgroundColor: "#10b981", color: "#f8fafc" }}
-              >
-                Connect Wallet
-              </button>
-            )
-          )}
         </div>
       </header>
 
