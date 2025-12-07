@@ -23,6 +23,7 @@ export default function SwapCard() {
   const [isApproving, setIsApproving] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
   const [txStatus, setTxStatus] = useState("");
+  const [txHash, setTxHash] = useState<string | null>(null);
   const [address, setAddress] = useState<string>("");
 
   const inputToken = isTokenAToB ? TOKENS.TOKEN_A : TOKENS.TOKEN_B;
@@ -119,6 +120,7 @@ export default function SwapCard() {
   const handleSwap = async () => {
     if (!wallet || !amount) return;
     setIsSwapping(true);
+    setTxHash(null);
     setTxStatus("Swapping...");
 
     try {
@@ -143,10 +145,10 @@ export default function SwapCard() {
       setTxStatus("Waiting for swap confirmation...");
       await tx.wait();
 
+      setTxHash(tx.hash);
       setTxStatus("Swap successful!");
       await fetchBalances();
       setAmount("");
-      setTimeout(() => setTxStatus(""), 3000);
     } catch (error: any) {
       console.error("Swap error:", error);
       setTxStatus("Swap failed: " + (error.message || "Unknown error"));
@@ -306,8 +308,24 @@ export default function SwapCard() {
 
           {/* Transaction Status */}
           {txStatus && (
-            <div className="text-center text-sm" style={{ color: "#cbd5e1" }}>
-              {txStatus}
+            <div className="text-center text-sm space-y-2">
+              <div style={{ color: "#cbd5e1" }}>
+                {txStatus}
+              </div>
+              {txHash && (
+                <a
+                  href={`https://unichain-sepolia.blockscout.com/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg transition-colors"
+                  style={{ backgroundColor: "rgba(16, 185, 129, 0.1)", color: "#10b981" }}
+                >
+                  View on Blockscout
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
             </div>
           )}
         </div>
